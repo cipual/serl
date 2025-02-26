@@ -2,6 +2,16 @@
 This file starts a control server running on the real time PC connected to the franka robot.
 In a screen run `python franka_server.py`
 """
+
+"""
+---------franka_state_controller/franka_states----------
+	q:	 Measured joint position.
+    dq:  Measured joint velocity.
+
+"""
+
+
+
 from flask import Flask, request, jsonify
 import numpy as np
 import rospy
@@ -10,6 +20,10 @@ import subprocess
 from scipy.spatial.transform import Rotation as R
 from absl import app, flags
 
+import sys
+sys.path.append('/home/star/serl/catkin_ws/devel/lib/python3/dist-packages')
+sys.path.append('/home/star/serl/serl_robot_infra')
+
 from franka_msgs.msg import ErrorRecoveryActionGoal, FrankaState
 from serl_franka_controllers.msg import ZeroJacobian
 import geometry_msgs.msg as geom_msg
@@ -17,13 +31,13 @@ from dynamic_reconfigure.client import Client as ReconfClient
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string(
-    "robot_ip", "172.16.0.2", "IP address of the franka robot's controller box"
+    "robot_ip", "192.168.1.25", "IP address of the franka robot's controller box"
 )
 flags.DEFINE_string(
     "gripper_ip", "192.168.1.114", "IP address of the robotiq gripper if being used"
 )
 flags.DEFINE_string(
-    "gripper_type", "Robotiq", "Type of gripper to use: Robotiq, Franka, or None"
+    "gripper_type", "Aubo", "Type of gripper to use: Robotiq, Franka, or None, or Aubo"
 )
 flags.DEFINE_list(
     "reset_joint_target",
@@ -43,7 +57,7 @@ class FrankaServer:
         self.gripper_type = gripper_type
 
         self.eepub = rospy.Publisher(
-            "/cartesian_impedance_controller/equilibrium_pose",
+            "/aubo_move_controller/target_pose",
             geom_msg.PoseStamped,
             queue_size=10,
         )
@@ -56,7 +70,7 @@ class FrankaServer:
             self._set_jacobian,
         )
         self.state_sub = rospy.Subscriber(
-            "franka_state_controller/franka_states", FrankaState, self._set_currpos
+            "aubo_state_controller/aubo_states", geom_msg.Pose, self._set_currpos
         )
 
     def start_impedance(self):
@@ -96,7 +110,7 @@ class FrankaServer:
 
         # Launch joint controller reset
         # set rosparm with rospkg
-        # rosparam set /target_joint_positions '[q1, q2, q3, q4, q5, q6, q7]'
+        # rosparam set /target_joint_positions '[q1, q2, q3, q4, q5, q6]'
         rospy.set_param("/target_joint_positions", self.reset_joint_target)
 
         self.joint_controller = subprocess.Popen(
@@ -105,7 +119,7 @@ class FrankaServer:
                 self.ros_pkg_name,
                 "joint.launch",
                 "robot_ip:=" + self.robot_ip,
-                f"load_gripper:={'true' if self.gripper_type == 'Franka' else 'false'}",
+                f"load_gripper:={'true' if self.gripper_type == 'Aubo' else 'false'}",
             ],
             stdout=subprocess.PIPE,
         )
@@ -150,14 +164,21 @@ class FrankaServer:
         self.eepub.publish(msg)
 
     def _set_currpos(self, msg):
-        tmatrix = np.array(list(msg.O_T_EE)).reshape(4, 4).T
-        r = R.from_matrix(tmatrix[:3, :3])
-        pose = np.concatenate([tmatrix[:3, -1], r.as_quat()])
-        self.pos = pose
-        self.dq = np.array(list(msg.dq)).reshape((7,))
-        self.q = np.array(list(msg.q)).reshape((7,))
-        self.force = np.array(list(msg.K_F_ext_hat_K)[:3])
-        self.torque = np.array(list(msg.K_F_ext_hat_K)[3:])
+        x = msg.position.x
+        y = msg.position.y
+        z = msg.position.z
+        
+        qx = msg.orientation.x
+        qy = msg.orientation.y
+        qz = msg.orientation.z
+        qw = msg.orientation.w
+        self.pos = np.array([x, y, z, qx ,qy, qz, qw])
+        self.dq = np.array(np.zeros(6))
+        self.q = np.array(np.zeros(6))
+        self.force = np.array(np.zeros(3))
+        self.torque = np.array(np.zeros(3))
+        self.jacobian = np.zeros((6, 7))
+        print(f"pos:{self.pos}")
         try:
             self.vel = self.jacobian @ self.dq
         except:
@@ -175,7 +196,7 @@ class FrankaServer:
 
 
 def main(_):
-    ROS_PKG_NAME = "serl_franka_controllers"
+    ROS_PKG_NAME = "my_aubo_controller"
 
     ROBOT_IP = FLAGS.robot_ip
     GRIPPER_IP = FLAGS.gripper_ip
@@ -191,16 +212,16 @@ def main(_):
         raise Exception("roscore not running", e)
 
     # Start ros node
-    rospy.init_node("franka_control_api")
+    rospy.init_node("aubo_control_api")
 
     if GRIPPER_TYPE == "Robotiq":
         from robot_servers.robotiq_gripper_server import RobotiqGripperServer
 
         gripper_server = RobotiqGripperServer(gripper_ip=GRIPPER_IP)
-    elif GRIPPER_TYPE == "Franka":
-        from robot_servers.franka_gripper_server import FrankaGripperServer
+    elif GRIPPER_TYPE == "Aubo":
+        from robot_servers.aubo_gripper_server import AuboGripperServer
 
-        gripper_server = FrankaGripperServer()
+        gripper_server = AuboGripperServer()
     elif GRIPPER_TYPE == "None":
         pass
     else:
@@ -213,11 +234,12 @@ def main(_):
         ros_pkg_name=ROS_PKG_NAME,
         reset_joint_target=RESET_JOINT_TARGET,
     )
-    robot_server.start_impedance()
-
-    reconf_client = ReconfClient(
-        "cartesian_impedance_controllerdynamic_reconfigure_compliance_param_node"
-    )
+    # robot_server.start_impedance()
+    
+    #动态地修改该节点的控制参数
+    # reconf_client = ReconfClient(
+    #     "cartesian_impedance_controllerdynamic_reconfigure_compliance_param_node"
+    # )
 
     # Route for Starting impedance
     @webapp.route("/startimp", methods=["POST"])
@@ -347,10 +369,10 @@ def main(_):
         )
 
     # Route for updating compliance parameters
-    @webapp.route("/update_param", methods=["POST"])
-    def update_param():
-        reconf_client.update_configuration(request.json)
-        return "Updated compliance parameters"
+    # @webapp.route("/update_param", methods=["POST"])
+    # def update_param():
+    #     reconf_client.update_configuration(request.json)
+    #     return "Updated compliance parameters"
 
     webapp.run(host="0.0.0.0")
 

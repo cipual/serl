@@ -1,0 +1,82 @@
+{
+    // 使用 IntelliSense 了解相关属性。 
+    // 悬停以查看现有属性的描述。
+    // 欲了解更多信息，请访问: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "sim actor",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            // "justMyCode": false,
+            "args": [
+                        "--actor" ,
+                        "--render" ,
+                        "--exp_name", "serl_dev_drq_sim_test_resnet", 
+                        "--seed", "0", 
+                        "--random_steps", "1000", 
+                        "--encoder_type", "resnet-pretrained" 
+            ]
+        },
+        {
+            "name": "sim leaner",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            // "justMyCode": false,
+            "args": [
+                    "--learner", 
+                    "--exp_name", "serl_dev_drq_sim_test_resnet", 
+                    "--seed", "0", 
+                    "--training_starts", "1000", 
+                    "--critic_actor_ratio", "4", 
+                    "--encoder_type", "resnet-pretrained" 
+            ]
+        },
+        {
+            "name": "peg_insert leaner",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            // "justMyCode": false,
+            "args": [
+                    "--learner", 
+                    "--env", "FrankaPegInsert-Vision-v0",
+                    "--exp_name", "serl_dev_drq_rlpd10demos_peg_insert_random_resnet_097",
+                    "--seed", "0",
+                    "--random_steps", "1000",
+                    "--training_starts", "200",
+                    "--critic_actor_ratio", "4",
+                    "--batch_size", "256",
+                    "--eval_period", "2000",
+                    "--encoder_type", "resnet-pretrained",
+                    "--demo_path peg_insert_20_demos_2023-12-25_16-13-25.pkl",
+                    "--checkpoint_period", "1000",
+                    "--checkpoint_path", "/home/undergrad/code/serl_dev/examples/async_peg_insert_drq/5x5_20degs_20demos_rand_peg_insert_097"
+            ]
+        },
+        {
+            "name": "peg_insert actor",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            // "justMyCode": false,
+            "args": [
+                    "--actor",
+                    "--render",
+                    "--env", "FrankaPegInsert-Vision-v0",
+                    "--exp_name", "serl_dev_drq_rlpd10demos_peg_insert_random_resnet",
+                    "--seed", "0",
+                    "--random_steps", "0",
+                    "--training_starts", "200",
+                    "--encoder_type", "resnet-pretrained",
+                    "--demo_path", "peg_insert_20_demos_2023-12-25_16-13-25.pkl"
+            ]
+        }
+    ]
+}

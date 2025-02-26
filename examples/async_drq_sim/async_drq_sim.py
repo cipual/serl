@@ -44,7 +44,7 @@ flags.DEFINE_string("exp_name", None, "Name of the experiment for wandb logging.
 flags.DEFINE_integer("max_traj_length", 1000, "Maximum length of trajectory.")
 flags.DEFINE_integer("seed", 42, "Random seed.")
 flags.DEFINE_bool("save_model", False, "Whether to save model.")
-flags.DEFINE_integer("batch_size", 256, "Batch size.")
+flags.DEFINE_integer("batch_size", 64, "Batch size.")
 flags.DEFINE_integer("critic_actor_ratio", 4, "critic to actor update ratio.")
 
 flags.DEFINE_integer("max_steps", 1000000, "Maximum number of training steps.")
@@ -70,7 +70,7 @@ flags.DEFINE_integer("checkpoint_period", 0, "Period to save checkpoints.")
 flags.DEFINE_string("checkpoint_path", None, "Path to save checkpoints.")
 
 flags.DEFINE_boolean(
-    "debug", False, "Debug mode."
+    "debug", True, "Debug mode."
 )  # debug mode will disable wandb logging
 
 flags.DEFINE_string("log_rlds_path", None, "Path to save RLDS logs.")
@@ -330,6 +330,9 @@ def main(_):
     if FLAGS.env == "PandaPickCubeVision-v0":
         env = SERLObsWrapper(env)
         env = ChunkingWrapper(env, obs_horizon=1, act_exec_horizon=None)
+
+    print('观测空间 = {}'.format(env.observation_space))
+    print('动作空间 = {}'.format(env.action_space))
 
     image_keys = [key for key in env.observation_space.keys() if key != "state"]
 

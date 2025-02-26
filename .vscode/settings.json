@@ -1,0 +1,6 @@
+{
+  "python.analysis.extraPaths": [
+    "./serl_robot_infra",
+    "./catkin_ws/devel/lib/python3/dist-packages"
+  ]
+}

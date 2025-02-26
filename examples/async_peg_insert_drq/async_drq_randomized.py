@@ -17,7 +17,8 @@ from serl_launcher.common.evaluation import evaluate
 from serl_launcher.utils.timer_utils import Timer
 from serl_launcher.wrappers.chunking import ChunkingWrapper
 from serl_launcher.utils.train_utils import concat_batches
-
+import sys
+sys.path.append('/home/star/serl/serl_robot_infra')
 from agentlace.trainer import TrainerServer, TrainerClient
 from agentlace.data.data_store import QueuedDataStore
 
@@ -44,6 +45,7 @@ flags.DEFINE_string("agent", "drq", "Name of agent.")
 flags.DEFINE_string("exp_name", None, "Name of the experiment for wandb logging.")
 flags.DEFINE_integer("max_traj_length", 100, "Maximum length of trajectory.")
 flags.DEFINE_integer("seed", 42, "Random seed.")
+flags.DEFINE_integer("batch_size", 64, "Batch size.")
 flags.DEFINE_bool("save_model", False, "Whether to save model.")
 flags.DEFINE_integer("critic_actor_ratio", 4, "critic to actor update ratio.")
 
