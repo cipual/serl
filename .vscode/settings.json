@@ -1,6 +1,10 @@
 {
   "python.analysis.extraPaths": [
     "./serl_robot_infra",
-    "./catkin_ws/devel/lib/python3/dist-packages"
+    "./catkin_ws/devel/lib/python3/dist-packages",
+    "./serl_robot_infra/franka_env/envs/peg_env",
+    "./serl_robot_infra/franka_env/envs",
+    "./examples/async_peg_insert_drq",
+    "/home/star/catkin_ws/devel/lib/python3/dist-packages"
   ]
 }

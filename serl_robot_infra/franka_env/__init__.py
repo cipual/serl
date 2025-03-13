@@ -14,6 +14,12 @@ register(
 )
 
 register(
+    id="AuboPegInsert-Vision-v0",
+    entry_point="franka_env.envs.peg_env:AuboPegInsert",
+    max_episode_steps=100,
+)
+
+register(
     id="FrankaPCBInsert-Vision-v0",
     entry_point="franka_env.envs.pcb_env:FrankaPCBInsert",
     max_episode_steps=100,

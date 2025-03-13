@@ -4,12 +4,12 @@ import time
 import requests
 import copy
 
-from franka_env.envs.franka_env import FrankaEnv
+from franka_env.envs.aubo_env import AuboEnv
 from franka_env.utils.rotations import euler_2_quat
 from franka_env.envs.peg_env.config import PegEnvConfig
 
 
-class FrankaPegInsert(FrankaEnv):
+class AuboPegInsert(AuboEnv):
     def __init__(self, **kwargs):
         super().__init__(**kwargs, config=PegEnvConfig)
 

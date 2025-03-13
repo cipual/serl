@@ -4,7 +4,7 @@ import gym
 import numpy as np
 from gym.spaces import Box
 import copy
-from franka_env.spacemouse.spacemouse_expert import SpaceMouseExpert
+from franka_env.spacemouse.spacemouse_expert import SpaceMouseExpert, AuboSoftExpert
 from franka_env.utils.rotations import quat_2_euler
 
 sigmoid = lambda x: 1 / (1 + np.exp(-x))
@@ -166,6 +166,69 @@ class GripperCloseEnv(gym.ActionWrapper):
         if "intervene_action" in info:
             info["intervene_action"] = info["intervene_action"][:6]
         return obs, rew, done, truncated, info
+
+import sys 
+sys.path.append("/home/star/serl/serl_robot_infra/franka_env/envs/peg_env")
+import common 
+
+class AuboSoftIntervention(gym.ActionWrapper):
+    def __init__(self, env):
+        super().__init__(env)
+
+        self.gripper_enabled = True
+        if self.action_space.shape == (6,):
+            self.gripper_enabled = False
+        
+        self.expert = AuboSoftExpert()
+        self.last_intervene = 0
+        self.left, self.right = False, False
+
+    def action(self, action: np.ndarray) -> np.ndarray:
+        """
+        Input:
+        - action: policy action
+        Output:
+        - action: spacemouse action if nonezero; else, policy action
+        """
+        if common.goto_create:
+            time.sleep(1)
+            self.expert.actions.clear()
+            self.expert.OK = True
+            actions = self.expert.create_action()
+            print(f"actions长度为:{len(actions)}")
+            # self.expert.OK = False
+        expert_a = self.expert.get_action()
+        self.left, self.right = (True, False)
+
+        if np.linalg.norm(expert_a) > 0.001:
+            self.last_intervene = time.time()
+
+        if self.gripper_enabled: # disabled
+            if self.left:  # close gripper
+                gripper_action = np.random.uniform(-1, -0.9, size=(1,))
+                self.last_intervene = time.time()
+            elif self.right:  # open gripper
+                gripper_action = np.random.uniform(0.9, 1, size=(1,))
+                self.last_intervene = time.time()
+            else:
+                gripper_action = np.zeros((1,))
+            expert_a = np.concatenate((expert_a, gripper_action), axis=0)
+
+        if time.time() - self.last_intervene < 0.5:
+            return expert_a, True
+
+        return action, False
+
+    def step(self, action):
+
+        new_action, replaced = self.action(action)
+
+        obs, rew, done, truncated, info = self.env.step(new_action)
+        if replaced:
+            info["intervene_action"] = new_action
+        info["left"] = self.left
+        info["right"] = self.right
+        return obs, rew, done, truncated, info   
 
 
 class SpacemouseIntervention(gym.ActionWrapper):

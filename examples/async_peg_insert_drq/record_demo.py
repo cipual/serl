@@ -4,7 +4,8 @@ import numpy as np
 import copy
 import pickle as pkl
 import datetime
-import os
+import os, sys
+sys.path.append('/home/star/serl/serl_robot_infra')
 
 import franka_env
 

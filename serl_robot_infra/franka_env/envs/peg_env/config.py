@@ -7,24 +7,24 @@ class PegEnvConfig(DefaultEnvConfig):
 
     SERVER_URL: str = "http://127.0.0.1:5000/"
     REALSENSE_CAMERAS = {
-        "wrist_1": "130322274175",
-        "wrist_2": "127122270572",
+        "wrist_1": "008222071923",
+        "wrist_2": "250122073121",
     }
     TARGET_POSE = np.array(
         [
-            0.5906439143742067,
-            0.07771711953459341,
-            0.0937835826958042,
-            3.1099675,
-            0.0146619,
-            -0.0078615,
+        -0.6029996276327194,
+         -0.09399988836395917,
+         0.28400442212218424,
+         3.0455920479682126,
+         -0.03543213628062181,
+         -1.57
         ]
     )
     RESET_POSE = TARGET_POSE + np.array([0.0, 0.0, 0.1, 0.0, 0.0, 0.0])
-    REWARD_THRESHOLD: np.ndarray = np.array([0.01, 0.01, 0.01, 0.2, 0.2, 0.2])
+    REWARD_THRESHOLD: np.ndarray = np.array([0.01, 0.01, 0.01, 0.02, 0.02, 0.02])
     APPLY_GRIPPER_PENALTY = False
     ACTION_SCALE = np.array([0.02, 0.1, 1])
-    RANDOM_RESET = True
+    RANDOM_RESET = False
     RANDOM_XY_RANGE = 0.05
     RANDOM_RZ_RANGE = np.pi / 6
     ABS_POSE_LIMIT_LOW = np.array(

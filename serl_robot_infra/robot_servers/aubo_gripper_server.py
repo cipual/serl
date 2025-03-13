@@ -30,7 +30,7 @@ class AuboGripperServer(GripperServer):
         self.grippergrasppub.publish(msg)
 
     def move(self, position: int):
-        """Move the gripper to a specific position in range [0, 255]"""
+        """Move the gripper to a specific position in range [0, 1000]"""
         msg = UInt16()
         if position >= 1000:
             position = 1000

@@ -40,7 +40,7 @@ import franka_env
 
 FLAGS = flags.FLAGS
 
-flags.DEFINE_string("env", "FrankaEnv-Vision-v0", "Name of environment.")
+flags.DEFINE_string("env", "AuboPegInsert-Vision-v0", "Name of environment.")
 flags.DEFINE_string("agent", "drq", "Name of agent.")
 flags.DEFINE_string("exp_name", None, "Name of the experiment for wandb logging.")
 flags.DEFINE_integer("max_traj_length", 100, "Maximum length of trajectory.")
@@ -121,12 +121,13 @@ def actor(agent: DrQAgent, data_store, env, sampling_rng):
                 obs = next_obs
 
                 if done:
-                    if reward:
+                    success = False if reward < 0 else True
+                    if success:
                         dt = time.time() - start_time
                         time_list.append(dt)
                         print(dt)
 
-                    success_counter += reward
+                    success_counter += success
                     print(reward)
                     print(f"{success_counter}/{episode + 1}")
 
@@ -313,7 +314,11 @@ def learner(rng, agent: DrQAgent, replay_buffer, demo_buffer):
 
 
 ##############################################################################
-
+"""
+    env
+    states(relative to reset end-effector): [x, y, z, rx, ry, rz, images]
+    actions(relative to reset end-effector): [dx, dy, dz, drx, dry, drz]
+"""
 
 def main(_):
     assert FLAGS.batch_size % num_devices == 0
@@ -327,8 +332,8 @@ def main(_):
         save_video=FLAGS.eval_checkpoint_step,
     )
     env = GripperCloseEnv(env)
-    if FLAGS.actor:
-        env = SpacemouseIntervention(env)
+    # if FLAGS.actor:
+    #     env = SpacemouseIntervention(env)
     env = RelativeFrame(env)
     env = Quat2EulerWrapper(env)
     env = SERLObsWrapper(env)

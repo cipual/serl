@@ -1,1 +1,1 @@
-from franka_env.envs.franka_env import FrankaEnv, DefaultEnvConfig
+from franka_env.envs.aubo_env import AuboEnv, DefaultEnvConfig

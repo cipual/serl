@@ -189,7 +189,13 @@ class FrankaEnv(gym.Env):
         return pose
 
     def step(self, action: np.ndarray) -> tuple:
-        """standard gym step function."""
+        """
+        standard gym step function.
+        @input: action
+                [dx, dy, dz, drx, dry, drz, gripper_action]
+        @output: ob, reward, done, truncated, info
+        
+        """
         start_time = time.time()
         action = np.clip(action, self.action_space.low, self.action_space.high)
         xyz_delta = action[:3]

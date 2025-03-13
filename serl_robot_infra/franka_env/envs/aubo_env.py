@@ -45,8 +45,8 @@ class DefaultEnvConfig:
 
     SERVER_URL: str = "http://127.0.0.1:5000/"
     REALSENSE_CAMERAS: Dict = {
-        "wrist_1": "130322274175",
-        "wrist_2": "127122270572",
+        "wrist_1": "008222071923",
+        "wrist_2": "250122073121",
     }
     TARGET_POSE: np.ndarray = np.zeros((6,))
     REWARD_THRESHOLD: np.ndarray = np.zeros((6,))
@@ -67,7 +67,7 @@ class DefaultEnvConfig:
 ##############################################################################
 
 
-class FrankaEnv(gym.Env):
+class AuboEnv(gym.Env):
     def __init__(
         self,
         hz=10,
@@ -79,6 +79,7 @@ class FrankaEnv(gym.Env):
         self.action_scale = config.ACTION_SCALE
         self._TARGET_POSE = config.TARGET_POSE
         self._REWARD_THRESHOLD = config.REWARD_THRESHOLD
+        self.stop_threshold = np.array([0.0001, 0.0001, 0.0001, 0.0001, 0.001, 0.001, 0.001])
         self.url = config.SERVER_URL
         self.config = config
         self.max_episode_length = max_episode_length
@@ -89,6 +90,7 @@ class FrankaEnv(gym.Env):
         )
 
         self.currpos = self.resetpos.copy()
+        self.lastpose = np.zeros((7,))
         self.currvel = np.zeros((6,))
         self.q = np.zeros((6,))
         self.dq = np.zeros((6,))
@@ -193,7 +195,9 @@ class FrankaEnv(gym.Env):
         start_time = time.time()
         action = np.clip(action, self.action_space.low, self.action_space.high)
         xyz_delta = action[:3]
-
+        #record demo的时候delay避免惯性误差
+        # time.sleep(0.5)
+        self._update_currpos()
         self.nextpos = self.currpos.copy()
         self.nextpos[:3] = self.nextpos[:3] + xyz_delta * self.action_scale[0]
 
@@ -215,7 +219,7 @@ class FrankaEnv(gym.Env):
         self._update_currpos()
         ob = self._get_obs()
         reward = self.compute_reward(ob, gripper_action_effective)
-        done = self.curr_path_length >= self.max_episode_length or reward == 1
+        done = self.curr_path_length >= self.max_episode_length or reward == 0
         return ob, reward, done, False, {}
 
     def compute_reward(self, obs, gripper_action_effective) -> bool:
@@ -223,17 +227,23 @@ class FrankaEnv(gym.Env):
         current_pose = obs["state"]["tcp_pose"]
         # convert from quat to euler first
         euler_angles = quat_2_euler(current_pose[3:])
-        euler_angles = np.abs(euler_angles)
+        # euler_angles = np.abs(euler_angles)
         current_pose = np.hstack([current_pose[:3], euler_angles])
         delta = np.abs(current_pose - self._TARGET_POSE)
+        delta[3:] = (delta[3:] + np.pi) % (2 * np.pi) - np.pi #转换成-pi - pi
+        delta[3:] = np.abs(delta[3:])
         if np.all(delta < self._REWARD_THRESHOLD):
-            reward = 1
-        else:
-            # print(f'Goal not reached, the difference is {delta}, the desired threshold is {_REWARD_THRESHOLD}')
+            print('Goal!')
+            print(f'pose:{current_pose}')
             reward = 0
+        else:
+            # print(f'Goal not reached, the difference is {delta}, the desired threshold is {self._REWARD_THRESHOLD}')
+            reward = -np.sum(delta)
 
         if self.config.APPLY_GRIPPER_PENALTY and gripper_action_effective:
             reward -= self.config.GRIPPER_PENALTY
+
+        print(f"reward:{reward}")
 
         return reward
 
@@ -278,6 +288,8 @@ class FrankaEnv(gym.Env):
         """Move the robot to the goal position with linear interpolation."""
         steps = int(timeout * self.hz)
         self._update_currpos()
+        if np.dot(self.currpos[3:], goal[3:]) < 0:
+            self.currpos[3:] = np.negative(self.currpos[3:])
         path = np.linspace(self.currpos, goal, steps)
         for p in path:
             self._send_pos_command(p)
@@ -291,7 +303,7 @@ class FrankaEnv(gym.Env):
         Should override this method if custom reset procedure is needed.
         """
         # Change to precision mode for reset
-        requests.post(self.url + "update_param", json=self.config.PRECISION_PARAM)
+        #requests.post(self.url + "update_param", json=self.config.PRECISION_PARAM)
         time.sleep(0.5)
 
         # Perform joint reset if needed
@@ -317,10 +329,10 @@ class FrankaEnv(gym.Env):
             self.interpolate_move(reset_pose, timeout=1.5)
 
         # Change to compliance mode
-        requests.post(self.url + "update_param", json=self.config.COMPLIANCE_PARAM)
+        #requests.post(self.url + "update_param", json=self.config.COMPLIANCE_PARAM)
 
     def reset(self, joint_reset=False, **kwargs):
-        requests.post(self.url + "update_param", json=self.config.COMPLIANCE_PARAM)
+        #requests.post(self.url + "update_param", json=self.config.COMPLIANCE_PARAM)
         if self.save_video:
             self.save_video_recording()
 
@@ -330,7 +342,7 @@ class FrankaEnv(gym.Env):
             joint_reset = True
 
         self.go_to_rest(joint_reset=joint_reset)
-        self._recover()
+        # self._recover()
         self.curr_path_length = 0
 
         self._update_currpos()
@@ -374,13 +386,13 @@ class FrankaEnv(gym.Env):
         except Exception as e:
             print(f"Failed to close cameras: {e}")
 
-    def _recover(self):
-        """Internal function to recover the robot from error state."""
-        requests.post(self.url + "clearerr")
+    # def _recover(self):
+    #     """Internal function to recover the robot from error state."""
+    #     requests.post(self.url + "clearerr")
 
     def _send_pos_command(self, pos: np.ndarray):
         """Internal function to send position command to the robot."""
-        self._recover()
+        # self._recover()
         arr = np.array(pos).astype(np.float32)
         data = {"arr": arr.tolist()}
         requests.post(self.url + "pose", json=data)
@@ -413,8 +425,19 @@ class FrankaEnv(gym.Env):
         """
         Internal function to get the latest state of the robot and its gripper.
         """
+        pos = np.zeros((7,))
         ps = requests.post(self.url + "getstate").json()
+        #wait for stopping
+        while True:
+            # time.sleep(0.1)
+            pos[:] = np.array(ps["pose"])
+            self.lastpose = self.currpos
+            self.currpos = pos
+            if np.all(np.abs(self.lastpose - self.currpos) < self.stop_threshold):
+                break
+
         self.currpos[:] = np.array(ps["pose"])
+
         self.currvel[:] = np.array(ps["vel"])
 
         self.currforce[:] = np.array(ps["force"])
@@ -436,3 +459,4 @@ class FrankaEnv(gym.Env):
             "tcp_torque": self.currtorque,
         }
         return copy.deepcopy(dict(images=images, state=state_observation))
+    
