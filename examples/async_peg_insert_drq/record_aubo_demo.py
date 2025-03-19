@@ -36,7 +36,7 @@ if __name__ == "__main__":
 
     transitions = []
     success_count = 0
-    success_needed = 20
+    success_needed = 40
     total_count = 0
     pbar = tqdm(total=success_needed)
 
@@ -76,16 +76,16 @@ if __name__ == "__main__":
 
         if done:
             common.goto_create = True
-            if rew < 0:
-                count = 0
-            else:
-                count = 1
-            success_count += count
+            # if rew < 0:
+            #     count = 0
+            # else:
+            #     count = 1
+            success_count += rew
             total_count += 1
             print(
-                f"{count}\tGot {success_count} successes of {total_count} trials. {success_needed} successes needed."
+                f"{rew}\tGot {success_count} successes of {total_count} trials. {success_needed} successes needed."
             )
-            pbar.update(count)
+            pbar.update(rew)
             obs, _ = env.reset()
 
 

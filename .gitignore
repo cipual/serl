@@ -75,6 +75,11 @@ docs/_build/
 .pybuilder/
 target/
 
+#checkpoint
+#peg insertion
+examples/async_peg_insert_drq/5x5_20degs_20demos_rand_peg_insert_*/
+
+
 # Jupyter Notebook
 .ipynb_checkpoints
 

@@ -6,6 +6,7 @@ from gym.spaces import Box
 import copy
 from franka_env.spacemouse.spacemouse_expert import SpaceMouseExpert, AuboSoftExpert
 from franka_env.utils.rotations import quat_2_euler
+import keyboard
 
 sigmoid = lambda x: 1 / (1 + np.exp(-x))
 
@@ -160,9 +161,9 @@ class GripperCloseEnv(gym.ActionWrapper):
         new_action[:6] = action.copy()
         return new_action
 
-    def step(self, action):
+    def step(self, action, replaced):
         new_action = self.action(action)
-        obs, rew, done, truncated, info = self.env.step(new_action)
+        obs, rew, done, truncated, info = self.env.step((new_action, replaced))
         if "intervene_action" in info:
             info["intervene_action"] = info["intervene_action"][:6]
         return obs, rew, done, truncated, info
@@ -190,32 +191,34 @@ class AuboSoftIntervention(gym.ActionWrapper):
         Output:
         - action: spacemouse action if nonezero; else, policy action
         """
-        if common.goto_create:
-            time.sleep(1)
-            self.expert.actions.clear()
-            self.expert.OK = True
-            actions = self.expert.create_action()
+        if self.expert.p_pressed: #如果按下‘p'执行干预
+            """prepare to intervene"""
+            self.expert.actions.clear() # clear actions list
+            self.expert.OK = True # set expert intervene flag
+            actions = self.expert.create_action() # sample actions, begin to invertern
+            self.expert.p_pressed = False # reset intervene button
             print(f"actions长度为:{len(actions)}")
-            # self.expert.OK = False
-        expert_a = self.expert.get_action()
-        self.left, self.right = (True, False)
+            
+        if self.expert.intervene_steps == -1 or self.expert.intervene_steps > 0: #干预到目标点或者剩余干预步数采取干预
+            expert_a = self.expert.get_action()
+            self.left, self.right = (True, False)
 
-        if np.linalg.norm(expert_a) > 0.001:
-            self.last_intervene = time.time()
-
-        if self.gripper_enabled: # disabled
-            if self.left:  # close gripper
-                gripper_action = np.random.uniform(-1, -0.9, size=(1,))
+            if np.linalg.norm(expert_a) > 0.001:
                 self.last_intervene = time.time()
-            elif self.right:  # open gripper
-                gripper_action = np.random.uniform(0.9, 1, size=(1,))
-                self.last_intervene = time.time()
-            else:
-                gripper_action = np.zeros((1,))
-            expert_a = np.concatenate((expert_a, gripper_action), axis=0)
 
-        if time.time() - self.last_intervene < 0.5:
-            return expert_a, True
+            if self.gripper_enabled: # in gripper_close env is disabled
+                if self.left:  # close gripper
+                    gripper_action = np.random.uniform(-1, -0.9, size=(1,))
+                    self.last_intervene = time.time()
+                elif self.right:  # open gripper
+                    gripper_action = np.random.uniform(0.9, 1, size=(1,))
+                    self.last_intervene = time.time()
+                else:
+                    gripper_action = np.zeros((1,))
+                expert_a = np.concatenate((expert_a, gripper_action), axis=0)
+
+            if time.time() - self.last_intervene < 0.5:
+                return expert_a, True
 
         return action, False
 
@@ -223,7 +226,9 @@ class AuboSoftIntervention(gym.ActionWrapper):
 
         new_action, replaced = self.action(action)
 
-        obs, rew, done, truncated, info = self.env.step(new_action)
+        obs, rew, done, truncated, info = self.env.step(new_action, replaced) #在这里阻塞时按下’p'
+        if done or self.expert.intervene_steps == 0:
+            self.expert.actions.clear() #清空干预动作列表
         if replaced:
             info["intervene_action"] = new_action
         info["left"] = self.left

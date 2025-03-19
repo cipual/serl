@@ -8,6 +8,8 @@ import numpy as np
 import tqdm
 from absl import app, flags
 from flax.training import checkpoints
+import pickle as pkl
+import os
 
 import gym
 from gym.wrappers.record_episode_statistics import RecordEpisodeStatistics
@@ -32,10 +34,10 @@ from serl_launcher.wrappers.serl_obs_wrappers import SERLObsWrapper
 from franka_env.envs.relative_env import RelativeFrame
 from franka_env.envs.wrappers import (
     GripperCloseEnv,
-    SpacemouseIntervention,
+    AuboSoftIntervention,
     Quat2EulerWrapper,
 )
-
+import copy
 import franka_env
 
 FLAGS = flags.FLAGS
@@ -106,6 +108,10 @@ def actor(agent: DrQAgent, data_store, env, sampling_rng):
         )
         agent = agent.replace(state=ckpt)
 
+        file_name = f"test.pkl"
+        file_dir = os.path.dirname(os.path.realpath(__file__))  # same dir as this script
+        file_path = os.path.join(file_dir, file_name)
+
         for episode in range(FLAGS.eval_n_trajs):
             obs, _ = env.reset()
             done = False
@@ -118,9 +124,23 @@ def actor(agent: DrQAgent, data_store, env, sampling_rng):
                 actions = np.asarray(jax.device_get(actions))
 
                 next_obs, reward, done, truncated, info = env.step(actions)
+                transitions = []
+                transition = copy.deepcopy(
+                    dict(
+                        observations=obs,
+                        actions=actions,
+                        next_observations=next_obs,
+                        rewards=reward,
+                        masks=1.0 - done,
+                        dones=done,
+                    )
+                )
+                transitions.append(transition)
                 obs = next_obs
-
+                
                 if done:
+                    with open(file_path, "wb") as f:
+                        pkl.dump(transitions, f)
                     success = False if reward < 0 else True
                     if success:
                         dt = time.time() - start_time
@@ -332,8 +352,8 @@ def main(_):
         save_video=FLAGS.eval_checkpoint_step,
     )
     env = GripperCloseEnv(env)
-    # if FLAGS.actor:
-    #     env = SpacemouseIntervention(env)
+    if FLAGS.actor:
+        env = AuboSoftIntervention(env)
     env = RelativeFrame(env)
     env = Quat2EulerWrapper(env)
     env = SERLObsWrapper(env)

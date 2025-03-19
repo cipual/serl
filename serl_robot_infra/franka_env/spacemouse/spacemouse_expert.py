@@ -9,8 +9,10 @@ import time
 import rospy
 from std_msgs.msg import Float64MultiArray
 from std_srvs.srv import SetBool
+from pynput import keyboard
 
 ACTION_SCALE = np.array([0.02, 0.1, 1])
+INTERVENE_STEPS = -1
 
 class SpaceMouseExpert:
     """
@@ -65,6 +67,26 @@ class AuboSoftExpert:
         self.current_action = []
         self.last_action = []
         self.OK =False #开始接受信息的标志
+        self.intervene_steps = INTERVENE_STEPS # -1:干预到设定目标点
+        self.p_pressed = False
+
+        def on_press(key):
+            """ 按键按下事件 """
+            try:
+                if key.char == 'p':
+                    self.p_pressed = True
+                    self.intervene_steps = INTERVENE_STEPS
+            except AttributeError:
+                pass
+
+        # 键盘监听
+        self.listener = keyboard.Listener(on_press=on_press)
+        self.listener.start()  # 非阻塞启动监听线程
+
+
+    def __del__(self):
+        """对象销毁时停止键盘监听"""
+        self.listener.stop()
 
     def callback(self, msg):
         """接收 action 并存入队列"""
@@ -119,9 +141,11 @@ class AuboSoftExpert:
     
     def get_action(self):
         try:
+            if self.intervene_steps > 0:
+                self.intervene_steps -= 1
             return self.actions.popleft()
         except IndexError:
-            print("no action found!")
+            print("no intervene action found!")
             return list(np.zeros(6,))
 
 if __name__ == "__main__":

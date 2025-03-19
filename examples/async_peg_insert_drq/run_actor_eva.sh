@@ -10,6 +10,6 @@ python /home/star/serl/examples/async_peg_insert_drq/async_drq_randomized.py "$@
     --training_starts 200 \
     --encoder_type resnet-pretrained \
     --demo_path /home/star/serl/examples/async_peg_insert_drq/peg_insert_20_demos_random_reset.pkl \
-    --eval_n_trajs 5 \
-    --eval_checkpoint_step 28000 \
-    --checkpoint_path /home/star/serl/examples/async_peg_insert_drq/5x5_20degs_20demos_rand_peg_insert_002 \
+    --eval_n_trajs 1 \
+    --eval_checkpoint_step 44000 \
+    --checkpoint_path /home/star/serl/examples/async_peg_insert_drq/5x5_20degs_20demos_rand_peg_insert_003 \

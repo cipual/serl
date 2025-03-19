@@ -75,6 +75,7 @@ class AuboEnv(gym.Env):
         save_video=False,
         config: DefaultEnvConfig = None,
         max_episode_length=100,
+        # max_episode_length=100000000000,
     ):
         self.action_scale = config.ACTION_SCALE
         self._TARGET_POSE = config.TARGET_POSE
@@ -190,13 +191,15 @@ class AuboEnv(gym.Env):
 
         return pose
 
-    def step(self, action: np.ndarray) -> tuple:
+    def step(self, action_tuple: np.ndarray) -> tuple:
         """standard gym step function."""
+        action, replaced = action_tuple
         start_time = time.time()
         action = np.clip(action, self.action_space.low, self.action_space.high)
         xyz_delta = action[:3]
         #record demo的时候delay避免惯性误差
-        # time.sleep(0.5)
+        if replaced:
+            time.sleep(0.2)   
         self._update_currpos()
         self.nextpos = self.currpos.copy()
         self.nextpos[:3] = self.nextpos[:3] + xyz_delta * self.action_scale[0]
@@ -219,7 +222,7 @@ class AuboEnv(gym.Env):
         self._update_currpos()
         ob = self._get_obs()
         reward = self.compute_reward(ob, gripper_action_effective)
-        done = self.curr_path_length >= self.max_episode_length or reward == 0
+        done = self.curr_path_length >= self.max_episode_length or reward == 1
         return ob, reward, done, False, {}
 
     def compute_reward(self, obs, gripper_action_effective) -> bool:
@@ -235,15 +238,16 @@ class AuboEnv(gym.Env):
         if np.all(delta < self._REWARD_THRESHOLD):
             print('Goal!')
             print(f'pose:{current_pose}')
-            reward = 0
+            reward = 1
         else:
-            # print(f'Goal not reached, the difference is {delta}, the desired threshold is {self._REWARD_THRESHOLD}')
-            reward = -np.sum(delta)
+            print(f'Goal not reached, the difference is {delta}, the desired threshold is {self._REWARD_THRESHOLD}')
+            # reward = -np.sum(delta)
+            reward = 0
 
         if self.config.APPLY_GRIPPER_PENALTY and gripper_action_effective:
             reward -= self.config.GRIPPER_PENALTY
 
-        print(f"reward:{reward}")
+        # print(f"reward:{reward}")
 
         return reward
 

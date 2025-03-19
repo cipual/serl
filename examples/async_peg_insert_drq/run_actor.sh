@@ -9,4 +9,4 @@ python /home/star/serl/examples/async_peg_insert_drq/async_drq_randomized.py "$@
     --random_steps 0 \
     --training_starts 200 \
     --encoder_type resnet-pretrained \
-    --demo_path /home/star/serl/examples/async_peg_insert_drq/peg_insert_20_demos_random_reset.pkl \
+    --demo_path /home/star/serl/examples/async_peg_insert_drq/peg_insert_40_demos_insert_fix.pkl \

@@ -28,6 +28,7 @@ sys.path.append('/home/star/catkin_ws/devel/lib/python3/dist-packages')
 from franka_msgs.msg import ErrorRecoveryActionGoal, FrankaState
 from serl_franka_controllers.msg import ZeroJacobian
 import geometry_msgs.msg as geom_msg
+from std_msgs.msg import Float64MultiArray
 from dynamic_reconfigure.client import Client as ReconfClient
 from my_aubo_controller.srv import Move
 
@@ -79,6 +80,9 @@ class AuboServer:
         )
         self.state_sub = rospy.Subscriber(
             "aubo_state_controller/aubo_states", geom_msg.Pose, self._set_currpos
+        )
+        self.force_sub = rospy.Subscriber(
+            "/SBchuan/force_pub", Float64MultiArray, self._set_currpos
         )
         rospy.wait_for_service('Move')
         self.movereq = rospy.ServiceProxy('Move', Move)
@@ -174,19 +178,21 @@ class AuboServer:
             pass
 
     def _set_currpos(self, msg):
-        x = msg.position.x
-        y = msg.position.y
-        z = msg.position.z
-        
-        qx = msg.orientation.x
-        qy = msg.orientation.y
-        qz = msg.orientation.z
-        qw = msg.orientation.w
-        self.pos = np.array([x, y, z, qx ,qy, qz, qw])
+        if isinstance(msg, geom_msg.Pose):
+            x = msg.position.x
+            y = msg.position.y
+            z = msg.position.z
+            
+            qx = msg.orientation.x
+            qy = msg.orientation.y
+            qz = msg.orientation.z
+            qw = msg.orientation.w
+            self.pos = np.array([x, y, z, qx ,qy, qz, qw])
+        elif isinstance(msg, Float64MultiArray):
+            self.force = np.array(msg.data[:3])
+            self.torque = np.array(msg.data[3:])
         self.dq = np.array(np.zeros(6))
         self.q = np.array(np.zeros(6))
-        self.force = np.array(np.zeros(3))
-        self.torque = np.array(np.zeros(3))
         self.jacobian = np.zeros((6, 7))
         # print(f"pos:{self.pos}")
         try:
