@@ -170,19 +170,24 @@ class GripperCloseEnv(gym.ActionWrapper):
 
 import sys 
 sys.path.append("/home/star/serl/serl_robot_infra/franka_env/envs/peg_env")
-import common 
+import termios
 
 class AuboSoftIntervention(gym.ActionWrapper):
-    def __init__(self, env):
+    def __init__(self, env, isrecord: bool):
         super().__init__(env)
 
         self.gripper_enabled = True
         if self.action_space.shape == (6,):
             self.gripper_enabled = False
         
-        self.expert = AuboSoftExpert()
+        self.expert = AuboSoftExpert(isrecord)
         self.last_intervene = 0
         self.left, self.right = False, False
+        self.intervene_steps = 20
+
+    def flush_stdin(self):
+        """清除标准输入缓冲区，防止 `p` 被误读"""
+        termios.tcflush(sys.stdin, termios.TCIOFLUSH)
 
     def action(self, action: np.ndarray) -> np.ndarray:
         """
@@ -192,12 +197,28 @@ class AuboSoftIntervention(gym.ActionWrapper):
         - action: spacemouse action if nonezero; else, policy action
         """
         if self.expert.p_pressed: #如果按下‘p'执行干预
+            self.expert.p_pressed = False # reset intervene button
+            self.flush_stdin()
             """prepare to intervene"""
             self.expert.actions.clear() # clear actions list
             self.expert.OK = True # set expert intervene flag
             actions = self.expert.create_action() # sample actions, begin to invertern
-            self.expert.p_pressed = False # reset intervene button
             print(f"actions长度为:{len(actions)}")
+
+            """decide intervene steps"""
+            if self.expert.record_mode:
+                self.expert.intervene_steps = -1
+            else:
+                x = input("enter number of intervene step: ")
+                print(f"x is {x}")
+                if x.lstrip('-').isdigit(): 
+                    if int(x) > 0 or int(x) == -1: #bug here: x = '--1' error
+                        self.expert.intervene_steps = int(x)
+                    else:
+                        self.expert.intervene_steps = self.intervene_steps # use deflaut value
+                else:
+                    self.expert.intervene_steps = self.intervene_steps # use deflaut value
+            print(f"num of steps is {self.expert.intervene_steps}")
             
         if self.expert.intervene_steps == -1 or self.expert.intervene_steps > 0: #干预到目标点或者剩余干预步数采取干预
             expert_a = self.expert.get_action()

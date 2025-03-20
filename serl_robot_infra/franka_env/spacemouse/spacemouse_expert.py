@@ -12,7 +12,9 @@ from std_srvs.srv import SetBool
 from pynput import keyboard
 
 ACTION_SCALE = np.array([0.02, 0.1, 1])
-INTERVENE_STEPS = -1
+INTERVENE_STEPS = 20
+
+
 
 class SpaceMouseExpert:
     """
@@ -47,7 +49,7 @@ class SpaceMouseExpert:
 
 
 class AuboSoftExpert:
-    def __init__(self):
+    def __init__(self, isrecord):
         rospy.init_node("action_collector", anonymous=True)
         
         # 创建客户端，连接到机械臂控制服务
@@ -69,13 +71,13 @@ class AuboSoftExpert:
         self.OK =False #开始接受信息的标志
         self.intervene_steps = INTERVENE_STEPS # -1:干预到设定目标点
         self.p_pressed = False
+        self.record_mode = isrecord
 
         def on_press(key):
             """ 按键按下事件 """
             try:
                 if key.char == 'p':
                     self.p_pressed = True
-                    self.intervene_steps = INTERVENE_STEPS
             except AttributeError:
                 pass
 
@@ -145,7 +147,7 @@ class AuboSoftExpert:
                 self.intervene_steps -= 1
             return self.actions.popleft()
         except IndexError:
-            print("no intervene action found!")
+            # print("no intervene action found!")
             return list(np.zeros(6,))
 
 if __name__ == "__main__":

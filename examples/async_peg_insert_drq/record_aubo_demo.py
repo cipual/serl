@@ -24,9 +24,10 @@ from serl_launcher.wrappers.serl_obs_wrappers import SERLObsWrapper
 from serl_launcher.wrappers.chunking import ChunkingWrapper
 
 if __name__ == "__main__":
+    isrecord = True
     env = gym.make("AuboPegInsert-Vision-v0")
     env = GripperCloseEnv(env)
-    env = AuboSoftIntervention(env)
+    env = AuboSoftIntervention(env, isrecord)
     env = RelativeFrame(env)
     env = Quat2EulerWrapper(env)
     env = SERLObsWrapper(env)

@@ -199,7 +199,7 @@ class AuboEnv(gym.Env):
         xyz_delta = action[:3]
         #record demo的时候delay避免惯性误差
         if replaced:
-            time.sleep(0.2)   
+            time.sleep(0.2)
         self._update_currpos()
         self.nextpos = self.currpos.copy()
         self.nextpos[:3] = self.nextpos[:3] + xyz_delta * self.action_scale[0]
@@ -240,7 +240,7 @@ class AuboEnv(gym.Env):
             print(f'pose:{current_pose}')
             reward = 1
         else:
-            print(f'Goal not reached, the difference is {delta}, the desired threshold is {self._REWARD_THRESHOLD}')
+            # print(f'Goal not reached, the difference is {delta}, the desired threshold is {self._REWARD_THRESHOLD}')
             # reward = -np.sum(delta)
             reward = 0
 

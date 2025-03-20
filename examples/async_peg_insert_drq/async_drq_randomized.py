@@ -345,6 +345,9 @@ def main(_):
     # seed
     rng = jax.random.PRNGKey(FLAGS.seed)
 
+    #not record demo
+    isrecord = False
+
     # create env and load dataset
     env = gym.make(
         FLAGS.env,
@@ -353,7 +356,7 @@ def main(_):
     )
     env = GripperCloseEnv(env)
     if FLAGS.actor:
-        env = AuboSoftIntervention(env)
+        env = AuboSoftIntervention(env, isrecord)
     env = RelativeFrame(env)
     env = Quat2EulerWrapper(env)
     env = SERLObsWrapper(env)
