@@ -30,7 +30,7 @@
 
 1.**insertion**
 
-![insert](./Serl-Test/docs/images/insert.gif)
+![insert](./docs/images/insert.gif)
 
 ## Citation
 
