@@ -30,7 +30,7 @@
 
 1.**insertion**
 
-![insert](D:\项目整理\自动化所实习\机械臂\Serl-Test\docs\images\insert.gif)
+![insert](./Serl-Test/docs/images/insert.gif)
 
 ## Citation
 
