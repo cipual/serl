@@ -21,7 +21,7 @@ from scipy.spatial.transform import Rotation as R
 from absl import app, flags
 
 import sys
-sys.path.append('/home/star/serl/catkin_ws/devel/lib/python3/dist-packages')
+sys.path.append('/home/star/serl/franka_ws/devel/lib/python3/dist-packages')
 sys.path.append('/home/star/serl/serl_robot_infra')
 sys.path.append('/home/star/catkin_ws/devel/lib/python3/dist-packages')
 

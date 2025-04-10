@@ -11,6 +11,10 @@ class RSCapture:
         self.name = name
         assert serial_number in self.get_device_serial_numbers()
         self.serial_number = serial_number
+        self.color_dist_coeffs = np.zeros(6)
+        self.depth_dist_coeffs = np.zeros(6)
+        self.color_intrinsics = None
+        self.depth_intrinsics = None
         self.depth = depth
         self.pipe = rs.pipeline()
         self.cfg = rs.config()
@@ -19,6 +23,7 @@ class RSCapture:
         if self.depth:
             self.cfg.enable_stream(rs.stream.depth, dim[0], dim[1], rs.format.z16, fps)
         self.profile = self.pipe.start(self.cfg)
+        self.get_intrinsics()
 
         # Create an align object
         # rs.align allows us to perform alignment of depth frames to others frames
@@ -46,3 +51,42 @@ class RSCapture:
     def close(self):
         self.pipe.stop()
         self.cfg.disable_all_streams()
+
+    def get_intrinsics(self):
+        if self.color_intrinsics is None:
+            intr_color = self.profile.get_stream(rs.stream.color).as_video_stream_profile().get_intrinsics()
+            camera_matrix = np.array(
+                [
+                    [intr_color.fx, 0, intr_color.ppx],
+                    [0, intr_color.fy, intr_color.ppy],
+                    [0,             0,              1],
+                ]
+            )
+            dist_coeffs = np.array(intr_color.coeffs)
+            self.color_intrinsics = camera_matrix
+            self.color_dist_coeffs = dist_coeffs
+        if self.depth_intrinsics is None and self.depth:
+            intr_depth = self.profile.get_stream(rs.stream.depth).as_video_stream_profile().get_intrinsics()
+            camera_matrix = np.array(
+                [
+                    [intr_depth.fx, 0, intr_depth.ppx],
+                    [0, intr_depth.fy, intr_depth.ppy],
+                    [0,             0,              1],
+                ]
+            )
+            dist_coeffs = np.array(intr_depth.coeffs)
+            self.depth_intrinsics = camera_matrix
+            self.depth_dist_coeffs = dist_coeffs
+            return self.color_intrinsics, self.color_dist_coeffs, self.depth_intrinsics, self.depth_dist_coeffs
+        return self.color_intrinsics, self.color_dist_coeffs
+
+"""test"""
+if __name__ == "__main__":
+    wrist_1 = RSCapture(name="wrist_1", serial_number="008222071923")
+    wrist_2 = RSCapture(name="wrist_2", serial_number="250122073121")
+    print('-----wrist_1-----')
+    print(wrist_1.color_intrinsics)
+    print(wrist_1.color_dist_coeffs)
+    print('-----wrist_2-----')
+    print(wrist_2.color_intrinsics)
+    print(wrist_2.color_dist_coeffs)

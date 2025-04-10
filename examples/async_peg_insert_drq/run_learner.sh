@@ -11,6 +11,6 @@ python /home/star/serl/examples/async_peg_insert_drq/async_drq_randomized.py "$@
     --batch_size 32 \
     --eval_period 2000 \
     --encoder_type resnet-pretrained \
-    --demo_path /home/star/serl/examples/async_peg_insert_drq/peg_insert_40_demos_insert_fix.pkl \
+    --demo_path /home/star/serl/examples/async_peg_insert_drq/peg_insert_40_demos_insert_random.pkl \
     --checkpoint_period 1000 \
-    --checkpoint_path /home/star/serl/examples/async_peg_insert_drq/5x5_20degs_20demos_rand_peg_insert_004
+    --checkpoint_path /home/star/serl/examples/async_peg_insert_drq/5x5_20degs_20demos_rand_peg_insert_001

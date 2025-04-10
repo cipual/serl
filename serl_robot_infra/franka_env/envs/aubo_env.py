@@ -2,6 +2,7 @@
 import numpy as np
 import gym
 import cv2
+import cv2.aruco as aruco
 import copy
 from scipy.spatial.transform import Rotation
 import time
@@ -77,8 +78,11 @@ class AuboEnv(gym.Env):
         max_episode_length=100,
         # max_episode_length=100000000000,
     ):
+        if config:
+            print(config.ACTION_SCALE)
         self.action_scale = config.ACTION_SCALE
         self._TARGET_POSE = config.TARGET_POSE
+        self.M_target2aruco = np.zeros((4, 4))
         self._REWARD_THRESHOLD = config.REWARD_THRESHOLD
         self.stop_threshold = np.array([0.0001, 0.0001, 0.0001, 0.0001, 0.001, 0.001, 0.001])
         self.url = config.SERVER_URL
@@ -126,8 +130,8 @@ class AuboEnv(gym.Env):
         )
         # Action/Observation Space (-1 ~ +1)
         self.action_space = gym.spaces.Box(
-            np.ones((7,), dtype=np.float32) * -1,
-            np.ones((7,), dtype=np.float32),
+            np.ones((7,), dtype=np.float32) * -2,
+            np.ones((7,), dtype=np.float32) * 2,
         )
 
         self.observation_space = gym.spaces.Dict(
@@ -165,6 +169,7 @@ class AuboEnv(gym.Env):
         self.img_queue = queue.Queue()
         self.displayer = ImageDisplayer(self.img_queue)
         self.displayer.start()
+        self.get_target_pose(isinit=True) #init self.M_target2aruco
         print("Initialized Aubo")
 
     def clip_safety_box(self, pose: np.ndarray) -> np.ndarray:
@@ -195,11 +200,12 @@ class AuboEnv(gym.Env):
         """standard gym step function."""
         action, replaced = action_tuple
         start_time = time.time()
-        action = np.clip(action, self.action_space.low, self.action_space.high)
-        xyz_delta = action[:3]
         #record demo的时候delay避免惯性误差
         if replaced:
             time.sleep(0.2)
+        else:
+            action = np.clip(action, self.action_space.low, self.action_space.high)
+        xyz_delta = action[:3]
         self._update_currpos()
         self.nextpos = self.currpos.copy()
         self.nextpos[:3] = self.nextpos[:3] + xyz_delta * self.action_scale[0]
@@ -221,6 +227,9 @@ class AuboEnv(gym.Env):
 
         self._update_currpos()
         ob = self._get_obs()
+        #get new targetpose
+        self.get_target_pose(False)
+        print(f'targetpose: {self._TARGET_POSE}')
         reward = self.compute_reward(ob, gripper_action_effective)
         done = self.curr_path_length >= self.max_episode_length or reward == 1
         return ob, reward, done, False, {}
@@ -254,9 +263,9 @@ class AuboEnv(gym.Env):
     def crop_image(self, name, image) -> np.ndarray:
         """Crop realsense images to be a square."""
         if name == "wrist_1":
-            return image[:, 80:560, :]
+            return image[230:, 230:560, :]
         elif name == "wrist_2":
-            return image[:, 80:560, :]
+            return image[230:, 230:560, :]
         else:
             return ValueError(f"Camera {name} not recognized in cropping")
 
@@ -287,6 +296,79 @@ class AuboEnv(gym.Env):
         )
         self.img_queue.put(display_images)
         return images
+
+    def get_target_pose(self, isinit:bool) -> np.ndarray:
+        """
+        Get the target pose from the environment.
+        if is init, create self.M_target2aruco
+        """
+        # wrist_1相机的外参
+        wrist_1 = self.cap["wrist_1"]
+        wrist_1.extrinsics = np.array(
+        [[-0.99976251,  0.01895704,  0.0107499,   0.03372786],
+        [-0.02115898, -0.96247701, -0.27053708,  0.11196437],
+        [ 0.00521795, -0.27070028,  0.96264954, -0.02858803],
+        [ 0.0,         0.0,         0.0,         1.0]]
+        )
+        M_camera2end = wrist_1.extrinsics
+        # 加载 ArUco 字典
+        aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_5X5_50)
+        parameters = aruco.DetectorParameters()
+        camera_matrix, dist_coeffs = wrist_1.get_intricsics()
+        # 读取图像
+        frame = wrist_1.read()
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        # 检测 ArUco 标记
+        corners, ids, rejected = aruco.detectMarkers(gray, aruco_dict, parameters=parameters)
+        if ids is not None:
+            # 估计每个 marker 的位姿
+            rvecs, tvecs, _ = aruco.estimatePoseSingleMarkers(corners, markerLength=0.05, cameraMatrix=camera_matrix, distCoeffs=dist_coeffs)
+            print(f'rvecs: {rvecs}, tvecs: {tvecs}')
+            # 计算目标位姿
+            # 检测到一个 marker
+            if len(rvecs) > 0:
+                rvec = rvecs[0][0]
+                tvec = tvecs[0][0]
+                # 将旋转向量转换为旋转矩阵
+                R, _ = cv2.Rodrigues(rvec)
+                # aruco到相机坐标系
+                M_aruco2camera = np.eye(4)
+                M_aruco2camera[:3, :3] = R
+                M_aruco2camera[:3, 3] = tvec
+                #aruco到末端坐标系
+                M_aruco2end = M_camera2end @ M_aruco2camera
+
+                # 末端到base坐标系
+                # 将四元数列表转换为 Rotation 对象
+                rotation = Rotation.from_quat(self.currpos[3:])
+                # 获取旋转矩阵
+                rotation_matrix = rotation.as_matrix()               
+                # 构造变换矩阵
+                M_end2base = np.eye(4)
+                M_end2base[:3, 3] = np.array(self.currpos[:3])  # 位置
+                M_end2base[:3, :3] = rotation_matrix  # 旋转部分
+
+                M_aruco2base = M_end2base @ M_aruco2end
+
+                if isinit:
+                    M_target2base = np.eye(4)
+                    M_target2base[:3, 3] = np.array(self._TARGET_POSE[:3])  # 位置
+                    M_target2base[:3, :3] = Rotation.from_euler('xyz' ,self._TARGET_POSE[3:], degrees= False).as_matrix()  # 旋转部分
+                    # 计算目标到aruco的变换矩阵
+                    self.M_target2aruco = np.linalg.inv(M_aruco2base) @ M_target2base
+                    return 
+
+
+                M_target2base = M_aruco2base @ self.M_target2aruco
+                # 将目标位姿转换为欧拉角
+                target_position = M_target2base[:3, 3]
+                target_rotation = Rotation.from_matrix(M_target2base[:3, :3]).as_euler("xyz")
+                self._TARGET_POSE = np.concatenate([target_position, target_rotation])
+                print(f"Target Pose: {self._TARGET_POSE}")
+                return
+
+
+
 
     def interpolate_move(self, goal: np.ndarray, timeout: float):
         """Move the robot to the goal position with linear interpolation."""

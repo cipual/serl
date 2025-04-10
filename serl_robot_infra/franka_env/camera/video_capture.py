@@ -37,3 +37,6 @@ class VideoCapture:
         self.enable = False
         self.t.join()
         self.cap.close()
+
+    def get_intricsics(self):
+        return self.cap.get_intrinsics()

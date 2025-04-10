@@ -67,14 +67,14 @@ set(serl_franka_controllers_CONFIG_INCLUDED TRUE)
 
 # set variables for source/devel/install prefixes
 if("TRUE" STREQUAL "TRUE")
-  set(serl_franka_controllers_SOURCE_PREFIX /home/star/serl/catkin_ws/src/serl_franka_controllers)
-  set(serl_franka_controllers_DEVEL_PREFIX /home/star/serl/catkin_ws/devel)
+  set(serl_franka_controllers_SOURCE_PREFIX /home/star/serl/franka_ws/src/serl_franka_controllers)
+  set(serl_franka_controllers_DEVEL_PREFIX /home/star/serl/franka_ws/devel)
   set(serl_franka_controllers_INSTALL_PREFIX "")
   set(serl_franka_controllers_PREFIX ${serl_franka_controllers_DEVEL_PREFIX})
 else()
   set(serl_franka_controllers_SOURCE_PREFIX "")
   set(serl_franka_controllers_DEVEL_PREFIX "")
-  set(serl_franka_controllers_INSTALL_PREFIX /home/star/serl/catkin_ws/install)
+  set(serl_franka_controllers_INSTALL_PREFIX /home/star/serl/franka_ws/install)
   set(serl_franka_controllers_PREFIX ${serl_franka_controllers_INSTALL_PREFIX})
 endif()
 
@@ -91,9 +91,9 @@ endif()
 # flag project as catkin-based to distinguish if a find_package()-ed project is a catkin project
 set(serl_franka_controllers_FOUND_CATKIN_PROJECT TRUE)
 
-if(NOT "/home/star/serl/catkin_ws/devel/include;/home/star/serl/catkin_ws/src/serl_franka_controllers/include;/opt/ros/noetic/include " STREQUAL " ")
+if(NOT "/home/star/serl/franka_ws/devel/include;/home/star/serl/franka_ws/src/serl_franka_controllers/include;/opt/ros/noetic/include " STREQUAL " ")
   set(serl_franka_controllers_INCLUDE_DIRS "")
-  set(_include_dirs "/home/star/serl/catkin_ws/devel/include;/home/star/serl/catkin_ws/src/serl_franka_controllers/include;/opt/ros/noetic/include")
+  set(_include_dirs "/home/star/serl/franka_ws/devel/include;/home/star/serl/franka_ws/src/serl_franka_controllers/include;/opt/ros/noetic/include")
   if(NOT " " STREQUAL " ")
     set(_report "Check the issue tracker '' and consider creating a ticket if the problem has not been reported yet.")
   elseif(NOT "https://serl-robot.github.io/ " STREQUAL " ")
@@ -110,7 +110,7 @@ if(NOT "/home/star/serl/catkin_ws/devel/include;/home/star/serl/catkin_ws/src/se
         message(FATAL_ERROR "Project 'serl_franka_controllers' specifies '${idir}' as an include dir, which is not found.  It does not exist in '${include}'.  ${_report}")
       endif()
     else()
-      message(FATAL_ERROR "Project 'serl_franka_controllers' specifies '${idir}' as an include dir, which is not found.  It does neither exist as an absolute directory nor in '/home/star/serl/catkin_ws/src/serl_franka_controllers/${idir}'.  ${_report}")
+      message(FATAL_ERROR "Project 'serl_franka_controllers' specifies '${idir}' as an include dir, which is not found.  It does neither exist as an absolute directory nor in '/home/star/serl/franka_ws/src/serl_franka_controllers/${idir}'.  ${_report}")
     endif()
     _list_append_unique(serl_franka_controllers_INCLUDE_DIRS ${include})
   endforeach()
@@ -154,7 +154,7 @@ foreach(library ${libraries})
     set(lib_path "")
     set(lib "${library}-NOTFOUND")
     # since the path where the library is found is returned we have to iterate over the paths manually
-    foreach(path /home/star/serl/catkin_ws/devel/lib;/opt/ros/noetic/lib)
+    foreach(path /home/star/serl/franka_ws/devel/lib;/home/star/UR_catkin/devel/lib;/home/star/urcontroller_ws/devel/lib;/home/star/catkin_ws/devel/lib;/opt/ros/noetic/lib)
       find_library(lib ${library}
         PATHS ${path}
         NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH)

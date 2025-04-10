@@ -5,6 +5,7 @@
     "./serl_robot_infra/franka_env/envs/peg_env",
     "./serl_robot_infra/franka_env/envs",
     "./examples/async_peg_insert_drq",
-    "/home/star/catkin_ws/devel/lib/python3/dist-packages"
+    "/home/star/catkin_ws/devel/lib/python3/dist-packages",
+    "./franka_ws/devel/lib/python3/dist-packages"
   ]
 }
