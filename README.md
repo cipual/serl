@@ -23,7 +23,7 @@
 2. **Setup AuboRosController:**
    
     ```bash
-    roslauch my_aubocontroller impetance.launch load_gripper:=true
+    roslaunch my_aubo_controller impedance.launch load_gripper:=true
     ```
 
 ## Overview
