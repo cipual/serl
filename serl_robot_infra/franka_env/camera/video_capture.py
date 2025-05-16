@@ -37,3 +37,9 @@ class VideoCapture:
         self.enable = False
         self.t.join()
         self.cap.close()
+
+    def get_intricsics(self):
+        return self.cap.get_intrinsics()
+
+    def deproject_pixel_to_point(self, depth_intrinsics, pixel, depth_value):
+        return self.cap.deproject_pixel_to_point(depth_intrinsics, pixel, depth_value)

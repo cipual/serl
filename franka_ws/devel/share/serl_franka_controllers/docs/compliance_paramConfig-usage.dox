@@ -1,0 +1,26 @@
+\subsubsection usage Usage
+\verbatim
+<node name="dynamic_compliance" pkg="serl_franka_controllers" type="dynamic_compliance">
+  <param name="translational_stiffness" type="double" value="2000.0" />
+  <param name="translational_damping" type="double" value="89.0" />
+  <param name="rotational_stiffness" type="double" value="150.0" />
+  <param name="rotational_damping" type="double" value="7.0" />
+  <param name="nullspace_stiffness" type="double" value="0.2" />
+  <param name="joint1_nullspace_stiffness" type="double" value="100.0" />
+  <param name="translational_clip_neg_x" type="double" value="0.01" />
+  <param name="translational_clip_neg_y" type="double" value="0.01" />
+  <param name="translational_clip_neg_z" type="double" value="0.01" />
+  <param name="translational_clip_x" type="double" value="0.01" />
+  <param name="translational_clip_y" type="double" value="0.01" />
+  <param name="translational_clip_z" type="double" value="0.01" />
+  <param name="rotational_clip_neg_x" type="double" value="0.05" />
+  <param name="rotational_clip_neg_y" type="double" value="0.05" />
+  <param name="rotational_clip_neg_z" type="double" value="0.05" />
+  <param name="rotational_clip_x" type="double" value="0.05" />
+  <param name="rotational_clip_y" type="double" value="0.05" />
+  <param name="rotational_clip_z" type="double" value="0.05" />
+  <param name="translational_Ki" type="double" value="0.0" />
+  <param name="rotational_Ki" type="double" value="0.0" />
+</node>
+\endverbatim
+

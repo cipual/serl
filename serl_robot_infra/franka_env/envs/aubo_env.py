@@ -2,6 +2,7 @@
 import numpy as np
 import gym
 import cv2
+import cv2.aruco as aruco
 import copy
 from scipy.spatial.transform import Rotation
 import time
@@ -11,7 +12,7 @@ import threading
 from datetime import datetime
 from collections import OrderedDict
 from typing import Dict
-
+import pyrealsense2 as rs
 from franka_env.camera.video_capture import VideoCapture
 from franka_env.camera.rs_capture import RSCapture
 from franka_env.utils.rotations import euler_2_quat, quat_2_euler
@@ -72,11 +73,12 @@ class AuboEnv(gym.Env):
         self,
         hz=10,
         fake_env=False,
-        save_video=False,
+        save_video=True,
         config: DefaultEnvConfig = None,
-        max_episode_length=100,
-        # max_episode_length=100000000000,
+        max_episode_length=200,
     ):
+        if config:
+            print(config.ACTION_SCALE)
         self.action_scale = config.ACTION_SCALE
         self._TARGET_POSE = config.TARGET_POSE
         self._REWARD_THRESHOLD = config.REWARD_THRESHOLD
@@ -126,8 +128,8 @@ class AuboEnv(gym.Env):
         )
         # Action/Observation Space (-1 ~ +1)
         self.action_space = gym.spaces.Box(
-            np.ones((7,), dtype=np.float32) * -1,
-            np.ones((7,), dtype=np.float32),
+            np.ones((7,), dtype=np.float32) * -2,
+            np.ones((7,), dtype=np.float32) * 2,
         )
 
         self.observation_space = gym.spaces.Dict(
@@ -161,6 +163,11 @@ class AuboEnv(gym.Env):
             return
 
         self.cap = None
+        # ArUco marker 与 target 的相对距离(x,y,z)
+        # 使用～/catkin_ws/src/my_aubo_controller/scripts/test_camera.py标定
+        self.marker2target = np.array([0.0494822, -0.01097698, 0.28018171, -0.00454577, 0.0307513, 0.04513861])
+        self.contactless_force = np.array([-1.8276804685592651,1.611989974975586,1.8630472421646118])
+        self.contactless_torque = np.array([-0.04563365876674652,0.20035456120967865,0.01827717199921608])
         self.init_cameras(config.REALSENSE_CAMERAS)
         self.img_queue = queue.Queue()
         self.displayer = ImageDisplayer(self.img_queue)
@@ -175,10 +182,10 @@ class AuboEnv(gym.Env):
         euler = Rotation.from_quat(pose[3:]).as_euler("xyz")
 
         # Clip first euler angle separately due to discontinuity from pi to -pi
-        sign = np.sign(euler[0])
-        euler[0] = sign * (
+        # sign = np.sign(euler[0])
+        euler[0] = (
             np.clip(
-                np.abs(euler[0]),
+                euler[0],
                 self.rpy_bounding_box.low[0],
                 self.rpy_bounding_box.high[0],
             )
@@ -195,13 +202,16 @@ class AuboEnv(gym.Env):
         """standard gym step function."""
         action, replaced = action_tuple
         start_time = time.time()
-        action = np.clip(action, self.action_space.low, self.action_space.high)
-        xyz_delta = action[:3]
         #record demo的时候delay避免惯性误差
         if replaced:
             time.sleep(0.2)
+        else:
+            action = np.clip(action, self.action_space.low, self.action_space.high)
+        xyz_delta = action[:3]
         self._update_currpos()
         self.nextpos = self.currpos.copy()
+        if np.any(np.abs(self.contactless_force[:2] - self.currforce[:2]) > 1.5) or self.currforce[2] < 0.5:
+            self.nextpos[2] += 0.010 #力过大向上1cm 
         self.nextpos[:3] = self.nextpos[:3] + xyz_delta * self.action_scale[0]
 
         # GET ORIENTATION FROM ACTION
@@ -221,6 +231,8 @@ class AuboEnv(gym.Env):
 
         self._update_currpos()
         ob = self._get_obs()
+        #get new targetpose
+        # self.get_target_pose()
         reward = self.compute_reward(ob, gripper_action_effective)
         done = self.curr_path_length >= self.max_episode_length or reward == 1
         return ob, reward, done, False, {}
@@ -241,13 +253,10 @@ class AuboEnv(gym.Env):
             reward = 1
         else:
             # print(f'Goal not reached, the difference is {delta}, the desired threshold is {self._REWARD_THRESHOLD}')
-            # reward = -np.sum(delta)
             reward = 0
 
         if self.config.APPLY_GRIPPER_PENALTY and gripper_action_effective:
             reward -= self.config.GRIPPER_PENALTY
-
-        # print(f"reward:{reward}")
 
         return reward
 
@@ -266,7 +275,8 @@ class AuboEnv(gym.Env):
         display_images = {}
         for key, cap in self.cap.items():
             try:
-                rgb = cap.read()
+                frame = cap.read()
+                rgb = frame[..., :3].astype(np.uint8)
                 cropped_rgb = self.crop_image(key, rgb)
                 resized = cv2.resize(
                     cropped_rgb, self.observation_space["images"][key].shape[:2][::-1]
@@ -288,6 +298,112 @@ class AuboEnv(gym.Env):
         self.img_queue.put(display_images)
         return images
 
+    def get_target_pose(self):
+        """
+        Get the target pose from the environment.
+        """
+        # wrist_1相机的外参
+        wrist_1 = self.cap["wrist_1"]
+        wrist_1.extrinsics = np.array([
+            [-0.99974713,  0.0191012,   0.01186678,  0.02983112],
+            [-0.02157909, -0.96336774, -0.26731431,  0.10141795],
+            [ 0.00632605, -0.26750279,  0.96353632,  0.03283929],
+            [ 0.0,         0.0,         0.0,         1.0]
+            ])
+        M_camera2end = wrist_1.extrinsics
+        # 加载 ArUco 字典
+        aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_5X5_50)
+        parameters = aruco.DetectorParameters()
+        color_matrix, color_dist_coeffs, depth_matrix, depth_dist_coeffs = wrist_1.get_intricsics()
+        # 读取图像
+        frame = wrist_1.read()
+        color = frame[..., :3].astype(np.uint8)
+        depth = frame[..., 3]  # 不做类型转换！
+        gray = cv2.cvtColor(color, cv2.COLOR_BGR2GRAY)
+        # 检测 ArUco 标记
+        corners, ids, rejected = aruco.detectMarkers(gray, aruco_dict, parameters=parameters)
+        if ids is not None:
+            # 取第一个 marker 的四个角点
+            marker_corners = corners[0][0]
+            center_pixel = np.mean(marker_corners, axis=0).astype(int)
+            u, v = center_pixel
+
+            # 获取深度值（以米为单位）
+            depth_value = depth[v, u] * 0.001  # 深度值通常是以毫米为单位，乘0.001转换为米
+            if depth_value == 0:
+                print("Depth at ArUco center is zero.")
+                return None
+            intrinsics = rs.intrinsics()
+            intrinsics.width = wrist_1.cap.width
+            intrinsics.height = wrist_1.cap.height
+            intrinsics.ppx = color_matrix[0, 2]
+            intrinsics.ppy = color_matrix[1, 2]
+            intrinsics.fx = color_matrix[0, 0]
+            intrinsics.fy = color_matrix[1, 1]
+            intrinsics.model = rs.distortion.none
+            intrinsics.coeffs = list(color_dist_coeffs)
+            # 反投影为 3D 空间点坐标
+            point_3d = wrist_1.deproject_pixel_to_point(intrinsics, [u, v], depth_value)
+            tvec = np.array(point_3d)  # 相机坐标系下的位置
+        
+            # 估计每个 marker 的位姿
+            rvecs, _, _ = aruco.estimatePoseSingleMarkers(corners, markerLength=0.05, cameraMatrix=color_matrix, distCoeffs=color_dist_coeffs)
+            # 计算目标位姿
+            # 检测到一个 marker
+            if len(rvecs) > 0:
+                rvec = rvecs[0][0]
+                # print(f'rvec: {rvec}, tvec: {tvec}')
+                # 将旋转向量转换为旋转矩阵
+                R, _ = cv2.Rodrigues(rvec)
+                # aruco到相机坐标系
+                M_aruco2camera = np.eye(4)
+                M_aruco2camera[:3, :3] = R
+                M_aruco2camera[:3, 3] = tvec
+                #aruco到末端坐标系
+                M_aruco2end = M_camera2end @ M_aruco2camera
+                #与末端坐标系对齐
+                M_aruco2end = M_aruco2end @ np.array([[-1, 0, 0, 0],
+                                                      [0, 1, 0, 0],
+                                                      [0, 0, -1, 0],
+                                                      [0, 0, 0, 1]])
+                # 末端到base坐标系
+                # 将四元数列表转换为 Rotation 对象
+                rotation = Rotation.from_quat(self.currpos[3:])
+                # 获取旋转矩阵
+                rotation_matrix = rotation.as_matrix()               
+                # 构造变换矩阵
+                M_end2base = np.eye(4)
+                M_end2base[:3, 3] = np.array(self.currpos[:3])  # 位置
+                M_end2base[:3, :3] = rotation_matrix  # 旋转部分
+
+                M_aruco2base = M_end2base @ M_aruco2end
+                # 取出位姿
+                position = M_aruco2base[:3, 3]
+                rotation_matrix = M_aruco2base[:3, :3]
+                # 将旋转矩阵转换为欧拉角
+                rotation = Rotation.from_matrix(rotation_matrix)
+                euler = rotation.as_euler('xyz', degrees=False)
+                # print(f'position{position}, euler{euler}')
+                position_slot = position + self.marker2target[:3]
+                euler_slot = euler + self.marker2target[3:]
+                # 对齐目标角度
+                for i in range(3):
+                    if np.sign(self._TARGET_POSE[3 + i]) != np.sign(euler_slot[i]):
+                        # 直接翻转角度（对 π 做镜像）
+                        if abs(euler_slot[i] - self._TARGET_POSE[3 + i]) > np.pi / 2:
+                            euler_slot[i] = euler_slot[i] - np.sign(euler_slot[i]) * 2 * np.pi
+                        else:
+                            euler_slot[i] *= -1
+                self._TARGET_POSE = np.array(position_slot.tolist() + euler_slot.tolist())
+                print(f"Target Pose: {self._TARGET_POSE}")
+                return M_aruco2base
+            else:
+                print("No markers detected")
+                return None
+        print("No ids detected")
+        return None
+
+
     def interpolate_move(self, goal: np.ndarray, timeout: float):
         """Move the robot to the goal position with linear interpolation."""
         steps = int(timeout * self.hz)
@@ -307,7 +423,6 @@ class AuboEnv(gym.Env):
         Should override this method if custom reset procedure is needed.
         """
         # Change to precision mode for reset
-        #requests.post(self.url + "update_param", json=self.config.PRECISION_PARAM)
         time.sleep(0.5)
 
         # Perform joint reset if needed
@@ -332,11 +447,7 @@ class AuboEnv(gym.Env):
             reset_pose = self.resetpos.copy()
             self.interpolate_move(reset_pose, timeout=1.5)
 
-        # Change to compliance mode
-        #requests.post(self.url + "update_param", json=self.config.COMPLIANCE_PARAM)
-
     def reset(self, joint_reset=False, **kwargs):
-        #requests.post(self.url + "update_param", json=self.config.COMPLIANCE_PARAM)
         if self.save_video:
             self.save_video_recording()
 
@@ -358,7 +469,7 @@ class AuboEnv(gym.Env):
         try:
             if len(self.recording_frames):
                 video_writer = cv2.VideoWriter(
-                    f'./videos/{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.mp4',
+                    f'/home/star/serl/examples/async_peg_insert_drq/videos/{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.mp4',
                     cv2.VideoWriter_fourcc(*"mp4v"),
                     10,
                     self.recording_frames[0].shape[:2][::-1],
@@ -377,8 +488,9 @@ class AuboEnv(gym.Env):
 
         self.cap = OrderedDict()
         for cam_name, cam_serial in name_serial_dict.items():
+            enable_depth = True if cam_name == "wrist_1" else False # wrist_1 need depth
             cap = VideoCapture(
-                RSCapture(name=cam_name, serial_number=cam_serial, depth=False)
+                RSCapture(name=cam_name, serial_number=cam_serial, depth=enable_depth)
             )
             self.cap[cam_name] = cap
 
@@ -390,13 +502,8 @@ class AuboEnv(gym.Env):
         except Exception as e:
             print(f"Failed to close cameras: {e}")
 
-    # def _recover(self):
-    #     """Internal function to recover the robot from error state."""
-    #     requests.post(self.url + "clearerr")
-
     def _send_pos_command(self, pos: np.ndarray):
         """Internal function to send position command to the robot."""
-        # self._recover()
         arr = np.array(pos).astype(np.float32)
         data = {"arr": arr.tolist()}
         requests.post(self.url + "pose", json=data)

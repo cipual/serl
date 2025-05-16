@@ -8,7 +8,7 @@ import os, sys
 sys.path.append('/home/star/serl/serl_robot_infra')
 sys.path.append("/home/star/serl/serl_robot_infra/franka_env/envs/peg_env")
 import common
-
+from pynput import keyboard
 
 import franka_env
 
@@ -35,6 +35,8 @@ if __name__ == "__main__":
 
     obs, _ = env.reset()
 
+    keyboard_controller = keyboard.Controller()
+
     transitions = []
     success_count = 0
     success_needed = 40
@@ -52,6 +54,8 @@ if __name__ == "__main__":
         raise FileExistsError(f"{file_name} already exists in {file_dir}")
     if not os.access(file_dir, os.W_OK):
         raise PermissionError(f"No permission to write to {file_dir}")
+
+    keyboard_controller.press('p')
 
     while success_count < success_needed:
         actions = np.zeros((6,))
@@ -77,15 +81,12 @@ if __name__ == "__main__":
 
         if done:
             common.goto_create = True
-            # if rew < 0:
-            #     count = 0
-            # else:
-            #     count = 1
             success_count += rew
             total_count += 1
             print(
                 f"{rew}\tGot {success_count} successes of {total_count} trials. {success_needed} successes needed."
             )
+            keyboard_controller.press('p')
             pbar.update(rew)
             obs, _ = env.reset()
 

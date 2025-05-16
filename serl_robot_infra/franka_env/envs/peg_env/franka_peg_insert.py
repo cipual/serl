@@ -26,7 +26,7 @@ class AuboPegInsert(AuboEnv):
         # Move up to clear the slot
         self._update_currpos()
         reset_pose = copy.deepcopy(self.currpos)
-        reset_pose[2] += 0.10
+        reset_pose[2] += 0.05
         self.interpolate_move(reset_pose, timeout=1)
 
         # execute the go_to_rest method from the parent class
