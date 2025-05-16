@@ -73,9 +73,9 @@ class AuboEnv(gym.Env):
         self,
         hz=10,
         fake_env=False,
-        save_video=False,
+        save_video=True,
         config: DefaultEnvConfig = None,
-        max_episode_length=100,
+        max_episode_length=200,
     ):
         if config:
             print(config.ACTION_SCALE)
@@ -182,10 +182,10 @@ class AuboEnv(gym.Env):
         euler = Rotation.from_quat(pose[3:]).as_euler("xyz")
 
         # Clip first euler angle separately due to discontinuity from pi to -pi
-        sign = np.sign(euler[0])
-        euler[0] = sign * (
+        # sign = np.sign(euler[0])
+        euler[0] = (
             np.clip(
-                np.abs(euler[0]),
+                euler[0],
                 self.rpy_bounding_box.low[0],
                 self.rpy_bounding_box.high[0],
             )
@@ -210,6 +210,8 @@ class AuboEnv(gym.Env):
         xyz_delta = action[:3]
         self._update_currpos()
         self.nextpos = self.currpos.copy()
+        if np.any(np.abs(self.contactless_force[:2] - self.currforce[:2]) > 1.5) or self.currforce[2] < 0.5:
+            self.nextpos[2] += 0.010 #力过大向上1cm 
         self.nextpos[:3] = self.nextpos[:3] + xyz_delta * self.action_scale[0]
 
         # GET ORIENTATION FROM ACTION
@@ -230,8 +232,7 @@ class AuboEnv(gym.Env):
         self._update_currpos()
         ob = self._get_obs()
         #get new targetpose
-        self.get_target_pose()
-        print(f'targetpose: {self._TARGET_POSE}')
+        # self.get_target_pose()
         reward = self.compute_reward(ob, gripper_action_effective)
         done = self.curr_path_length >= self.max_episode_length or reward == 1
         return ob, reward, done, False, {}
@@ -262,9 +263,9 @@ class AuboEnv(gym.Env):
     def crop_image(self, name, image) -> np.ndarray:
         """Crop realsense images to be a square."""
         if name == "wrist_1":
-            return image[230:, 230:560, :]
+            return image[:, 80:560, :]
         elif name == "wrist_2":
-            return image[230:, 230:560, :]
+            return image[:, 80:560, :]
         else:
             return ValueError(f"Camera {name} not recognized in cropping")
 
@@ -468,7 +469,7 @@ class AuboEnv(gym.Env):
         try:
             if len(self.recording_frames):
                 video_writer = cv2.VideoWriter(
-                    f'./videos/{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.mp4',
+                    f'/home/star/serl/examples/async_peg_insert_drq/videos/{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.mp4',
                     cv2.VideoWriter_fourcc(*"mp4v"),
                     10,
                     self.recording_frames[0].shape[:2][::-1],
@@ -503,7 +504,6 @@ class AuboEnv(gym.Env):
 
     def _send_pos_command(self, pos: np.ndarray):
         """Internal function to send position command to the robot."""
-        # self._recover()
         arr = np.array(pos).astype(np.float32)
         data = {"arr": arr.tolist()}
         requests.post(self.url + "pose", json=data)

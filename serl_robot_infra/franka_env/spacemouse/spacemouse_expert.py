@@ -11,7 +11,7 @@ from std_msgs.msg import Float64MultiArray
 from std_srvs.srv import SetBool
 from pynput import keyboard
 
-ACTION_SCALE = np.array([0.005, 0.03, 1])
+ACTION_SCALE = np.array([0.002, 0.01, 1])
 INTERVENE_STEPS = 20
 
 
